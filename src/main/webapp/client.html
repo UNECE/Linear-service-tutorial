@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link href="style.css" rel="stylesheet">
+  </head>
+  <body>
+    <h1>Let's regress!</h1>
+    <div class="svg-container"></div>
+    <div class="control-panel">
+      <div class="buttons">
+        <a id="regress-button" class="btn blue">Regress</a>
+        <a id="reset-button" class="btn yellow">Reset</a>
+      </div>
+    </div>
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script>
+      var points = [];
+
+      var margin = {top: 20, right: 20, bottom: 30, left: 40};
+      var width = 960 - margin.left - margin.right;
+      var height = 600 - margin.top - margin.bottom;
+      var xScale = d3.scale.linear().domain([0, 10]).range([margin.left, width - margin.right]);
+      var yScale = d3.scale.linear().domain([0, 10]).range([height - margin.bottom, margin.top]);
+      var radius = 3;
+      var precision = 100;
+
+      var circleAttrs = {
+        cx: function(point) { return xScale(point.X); },
+        cy: function(point) { return yScale(point.Y); },
+        r: radius
+      };
+      var svg = d3.select("div.svg-container").append("svg").attr("width", width).attr("height", height);
+
+      // Define xAxis and yAxis functions ('orient' means the direction that ticks go, not position)
+      var xAxis = d3.svg.axis().scale(xScale).orient("bottom");
+      var yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+      // Add X-Axis and Y-Axis as 'g' (group) elements
+      svg.append("g").attr({
+        "class": "axis",  // Give class so we can style it
+        transform: "translate(" + [0, height - margin.bottom] + ")" // Translate just moves it down into position (or will be on top)
+      }).call(xAxis);  // Call the xAxis function on the group
+      svg.append("g").attr({
+        "class": "axis",
+        transform: "translate(" + [margin.left, 0] + ")"
+      }).call(yAxis);
+
+      // Clicks on the graph will plot new points
+      svg.on("click", function() {
+        var pixel = d3.mouse(this);
+        // Translate from pixel to point coordinates
+        var newPoint = {
+          X: Math.round(precision*xScale.invert(pixel[0]))/precision,
+          Y: Math.round(precision*yScale.invert(pixel[1]))/precision
+        };
+        points.push(newPoint); // Add new point to the array and update plot
+        svg.selectAll("circle")
+          .data(points)
+          .enter()
+          .append("circle").attr(circleAttrs);
+        // Add a label with the coordinates of the new point
+        svg.append("text").attr({
+            class: "label", // So we can select only label texts in the reset function
+            x: function() { return xScale(newPoint.X) - 30; },
+            y: function() { return yScale(newPoint.Y) - 15; }
+          })
+          .text(function() { return "[" + newPoint.X + "," + newPoint.Y + "]"; });
+      });
+
+      // Clicking the Regress button calls the web service and draws the result line
+      d3.select("#regress-button").on("click", function() {
+    	if (points.length < 2) return; // Not enough points
+        xhr = new XMLHttpRequest();
+        xhr.open("POST", "model/linear", true);
+        xhr.setRequestHeader("Accept", "application/json");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.onreadystatechange = function () { 
+          if (xhr.readyState == 4 && xhr.status == 200) {
+            var model = JSON.parse(xhr.responseText);
+            svg.append("line").attr({
+              class: "model",
+              x1: function() { return xScale(0); },
+              y1: function() { return yScale(model.Intercept); },
+              x2: function() { return xScale(10); },
+              y2: function() { return yScale(model.Intercept + 10*model.Slope); }
+            })
+          }
+        }
+        xhr.send(JSON.stringify({Point: points}));
+      });
+
+      // Clicking the Reset button empties the plot and the point array
+      d3.select("#reset-button").on("click", function() {
+        svg.selectAll("circle,line,.label").remove();
+        points = [];
+      });
+
+    </script>
+  </body>
+</html>

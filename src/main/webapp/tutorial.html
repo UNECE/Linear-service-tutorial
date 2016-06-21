@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link href="style.css" rel="stylesheet">
+  </head>
+  <body>
+    <h1>Tutorial: a simple linear regression CSPA service</h1>
+    <h2>Introduction</h2>
+    <p>The aim of this tutorial is to show concretely how an R script can be wrapped in a REST service so as to be usable in CSPA architectures. We will take the example of a linear regression service.</p>
+    <p>The Java development stack will be used for maximum portability. All software components used or produced in this tutorial are free and open source.</p>
+    <h2>Presentation of the service</h2>
+    <h3>Overview</h3>
+    <img src="img/regression-sd.png"/>
+    <h3>Narrative</h3>
+	<p>From a high-level view, a linear regression takes a set of points and calculates the line that best fits those points (we will stay in dimension 2 in this example), as well as various statistics that qualify the quality of the fitting.</p>
+	<p>Here, we will limit ourselves to returning the line only, characterized by its intercept (ordinate at 0) and slope.</p>
+	<p>More information would be needed to produce proper CSPA service definition and specification, but we focus here on the description of a specific service implementation.</p>
+    <h2>Service implementation</h2>
+    <p>We will use R for the regression operation, and wrap the R script execution into a REST web service on a Java platform.</p>
+    <h3>Creating the web application</h3>
+    <h4>Introduction</h4>
+    <p>We will implement the REST service using the <a href="https://jersey.java.net/">Jersey</a> JAX-RS reference implementation.</p>
+    <h4>Prerequisites</h4>
+    <p>The following software should be installed:</p>
+    <ul>
+      <li><p>Eclipse (Java EE IDE for Web Developers distribution) with <a href="http://www.eclipse.org/m2e/">Maven plugin</a>. The active Java machine for Eclipse should be a JDK (see Window → Preferences → Java → Installed JREs).</p></li>
+      <li><p>The <a href="http://mvnrepository.com/artifact/org.glassfish.jersey.archetypes/jersey-quickstart-webapp">Jersey Webapp Archetype</a> should be installed (this can be done while creating the project, see below).</p></li>
+    </ul>
+    <h4>Creation of the project</h4>
+    <p>In Eclipse, create a new Maven project (File → New → Maven Project). Choose the project location or accept the default workspace location, then select the <code>jersey-quickstart-webapp</code> archetype. If not present, the archetype can be installed by clicking &ldquo;Add Archetype&hellip;&rdquo;</p>
+    <img src="img/add-jersey-archetype.png"/>
+    <p>Indicate the Maven parameters for the project, for example:</p>
+    <img src="img/project-parameters.png"/>
+    <p>Click on &ldquo;Finish&rdquo; to create the project. A quick-start project layout is created in Eclipse Project Explorer.</p>
+    <h4>Modification of the project</h4>
+    <p>Some changes should be made to the project created by default in order to adapt it to our needs:<p/>
+    <ul>
+      <li>delete the <code>index.jsp</code> in the <code>src/main/webapp</code> folder;</li>
+      <li>in the <code>pom.xml</code> file, delete lines 47 and 52 to uncomment the MOXy dependency because we would like our service to support JSON;</li>
+      <li>in the <code>web.xml</code> file (located in <code>src/main/webapp/WEB-INF</code>), change the Jersey servlet mapping: in the <code>url-pattern</code> (line 16), replace <code>/webapi/*</code> by something more meaningful in our context, for example <code>/model/*</code>.
+    </ul>
+    <h4>Definition of inputs and outputs</h4>
+    <p>The service inputs and outputs will be formalized with XML Schema. <a href="https://jaxb.java.net/">JAXB</a> will then be used to generate the corresponding Java classes.</p>
+    <h5>Design of the XML Schema</h5>
+    <p>In the Project Explorer, right-click on the <code>src/main/resources</code> folder and select New → Other&hellip; → XML → XML Schema File. Give the file a name, for example <code>regression-service.xsd</code>. Insert between the <code>&lt;Schema></code> and <code>&lt;/Schema></code> tags the definition of the business objets:</p>
+    <pre>
+      <code class="language-xml">
+        &lt;element name="Point">
+          &lt;complexType>
+            &lt;sequence>
+              &lt;element name="X" type="double"/>
+              &lt;element name="Y" type="double"/>
+            &lt;/sequence>
+          &lt;/complexType>
+        &lt;/element>
+        &lt;element name="Points">
+          &lt;complexType>
+            &lt;sequence maxOccurs="unbounded">
+              &lt;element ref="tns:Point"/>
+            &lt;/sequence>
+          &lt;/complexType>
+        &lt;/element>
+    
+        &lt;element name="Model">
+          &lt;complexType>
+            &lt;sequence>
+              &lt;element name="Intercept" type="double"/>
+              &lt;element name="Slope" type="double"/>
+            &lt;/sequence>
+          &lt;/complexType>
+        &lt;/element>
+      </code>
+    </pre>
+    <p>Visually, this corresponds to the following design:</p>
+    <img src="img/regression-schema.png"/>
+    <h5>Generation of the Java classes</h5>
+    <p>In the Project Explorer, right-click on the newly-created XSD file and select Generate → JAXB Classes&hellip; Confirm the destination project, indicate the destination package (for example <code>org.unece.cspa.services.regression.objects</code>) and click on &ldquo;Finish&rdquo; to generate the Java classes.</p>
+    <h4>Definition of the service</h4>
+    <p>The treatment will consist in executing a R script producing the linear regression model from the input data. There are different possibilities for including R calculations in Java programs: here we will use <a href="https://github.com/bedatadriven/renjin">Renjin</a>.</p>
+    <h5>Maven configuration</h5>
+    <p>In order to make Renjin available in the program, we have to change the Maven pom.xml file to add the Renjin dependency and the address of the repository where Renjin Maven artifacts are published. This is clearly described by Renjin <a href="http://docs.renjin.org/en/latest/introduction.html#setting-up-a-java-project-for-renjin">online documentation</a>.</p>
+    <p>The repository is declared by adding the following section:</p>
+    <pre>
+      <code>
+        &lt;repositories>
+          &lt;repository>
+            &lt;id>bedatadriven&lt;/id>
+            &lt;name>bedatadriven public repo&lt;/name>
+            &lt;url>https://nexus.bedatadriven.com/content/groups/public/&lt;/url>
+          &lt;/repository>
+        &lt;/repositories>
+      </code>
+    </pre>
+    <p>The Renjin dependency must be inserted in the <code>dependencies</code> section:</p>
+    <pre>
+      <code>
+        &lt;dependency>
+          &lt;groupId>org.renjin&lt;/groupId>
+          &lt;artifactId>renjin-script-engine&lt;/artifactId>
+          &lt;version>RELEASE&lt;/version>
+        &lt;/dependency>
+      </code>
+    </pre>
+    <h5>Service resource</h5>
+    <p>The Maven quick-start project contains an example service implementation resource: <code>MyResource.java</code>. We have to modify this resource in order to fit our needs.</p>
+    <p>First, rename the class to better reflect its function: select <code>MyResource.java</code> in Eclipse Project Explorer and rename it (Alt+Maj+R) <code>Linear.java</code>. Double-click on the class to open it in the editor.</p>
+    <p>Similarly, in the <code>@Path</code> annotation, replace <code>"myresource"</code> with <code>"linear"</code>. This means that Jersey will delegate the handling of HTTP request ending with <code>/linear</code> to this class.</p>
+    <p>Since our input and output classes are generated by JAXB, corresponding objects can be marshalled and unmarshalled from and to either XML or JSON. To reflect this, we replace the simple <code>@Produces(MediaType.TEXT_PLAIN)</code> annotation by:
+    <pre>
+      <code class="language-java">
+        @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+        @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+      </code>
+    </pre>
+    <p>Additionally, the service design specifies that the resource will receive data (points) and send back results. This corresponds to the behaviour of a HTTP POST request, not GET. Therefore, we replace the <code>@GET</code> annotation by a <code>@POST</code> annotation.</p>
+    <p>Finally, we modify the method signature according to our service definition:</p>
+    <pre>
+      <code class="language-java">
+        public Model regression(Points points) {
+          return null;
+        }
+      </code>
+    </pre>
+    <h5>Linear regression in R</h5>
+    <p>The basic method for performing linear regression in R is to use the <code>lm()</code> function (see the <a href="https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Linear-models">R manual</a>). For example, <code>lm(y ~ x)</code> will return an object containing various statistical results of the linear fitting of y on x: regression coefficients, standard errors, etc.</p>
+    <p>In order to run the <code>lm()</code> function, we need a Renjin script engine:</p>
+    <pre>
+      <code class="language-java">
+        RenjinScriptEngineFactory factory = new RenjinScriptEngineFactory();
+        RenjinScriptEngine engine = factory.getScriptEngine();
+        engine.eval("lm(y ~ x)");
+      </code>
+    </pre>
+    <p>Here, <code>x</code> and <code>y</code> would be the vectors formed by the coordinates of our input points and we have to transmit these data to the script engine.</p>
+    <h5>Passing data to R</h5>
+    <p>Renjin has an extensive library of classes corresponding to different R object types (see <a href="http://docs.renjin.org/en/latest/moving-data-between-java-and-r-code.html">online documentation</a>). We can use <code>DoubleVector</code> objects (vectors made with Java <code>double</code> numbers) to pass our coordinates, more specifically instances of the concrete subclass <code>DoubleArrayVector</code>, which can be easily constructed from our <code>Points</code>:</p>
+    <pre>
+      <code class="language-java">
+        List&lt;Double> xCoordinates = new ArrayList&lt;Double>();
+        List&lt;Double> yCoordinates = new ArrayList&lt;Double>();
+        for (Point point : points.getPoint()) {
+          xCoordinates.add(point.getX());
+          yCoordinates.add(point.getY());
+        }
+        DoubleVector xVector = new DoubleArrayVector(xCoordinates);
+        DoubleVector yVector = new DoubleArrayVector(yCoordinates);
+      </code>
+    </pre>
+    <p>The vectors are then made available to the R script through the engine:</p>
+    <pre>
+      <code class="language-java">
+        engine.put("x", xVector);
+        engine.put("y", yVector);
+      </code>
+    </pre>
+    <h5>Retrieving the results</h5>
+    <p>The <code>lm()</code> function produces an R <code>list</code> of objects containing the different characteristics of the resulting model. Ths list can be mapped to a Renjin <code>ListVector</code>. We are interested by the <code>coefficients</code> element:</p>
+    <pre>
+      <code class="language-java">
+        ListVector rModel = (ListVector)engine.eval("lm(y ~ x)");
+        Vector coefficients = rModel.getElementAsVector("coefficients");
+      </code>
+    </pre>
+    <p>Finally, we construct our own simple <code>Model</code> return object:</p>
+    <pre>
+      <code class="language-java">
+        Model model = new Model();
+        model.setIntercept(coefficients.getElementAsDouble(0));
+        model.setSlope(coefficients.getElementAsDouble(1));
+      </code>
+    </pre>
+    <h5>Service class</h5>
+    <p>The complete service class is thus:</p>
+    <pre>
+      <code class="language-java">
+        package org.unece.cspa.services.regression;
+
+        import java.util.ArrayList;
+        import java.util.List;
+
+        import javax.script.ScriptException;
+        import javax.ws.rs.Consumes;
+        import javax.ws.rs.POST;
+        import javax.ws.rs.Path;
+        import javax.ws.rs.Produces;
+        import javax.ws.rs.core.MediaType;
+
+        import org.renjin.script.RenjinScriptEngine;
+        import org.renjin.script.RenjinScriptEngineFactory;
+        import org.renjin.sexp.DoubleArrayVector;
+        import org.renjin.sexp.DoubleVector;
+        import org.renjin.sexp.ListVector;
+        import org.renjin.sexp.Vector;
+        import org.unece.cspa.services.regression.objects.Model;
+        import org.unece.cspa.services.regression.objects.Point;
+        import org.unece.cspa.services.regression.objects.Points;
+
+        /**
+         * Service resource (exposed at "linear" path)
+         */
+        @Path("linear")
+        public class Linear {
+
+          @POST
+          @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+          @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+          public Model regression(Points points) {
+
+            List&lt;Double> xCoordinates = new ArrayList&lt;Double>();
+            List&lt;Double> yCoordinates = new ArrayList&lt;Double>();
+
+            // Transform list of points in two vectors x and y
+            for (Point point : points.getPoint()) {
+              xCoordinates.add(point.getX());
+              yCoordinates.add(point.getY());
+            }
+            DoubleVector xVector = new DoubleArrayVector(xCoordinates);
+            DoubleVector yVector = new DoubleArrayVector(yCoordinates);
+
+            // Start the R engine
+            RenjinScriptEngineFactory factory = new RenjinScriptEngineFactory();
+            RenjinScriptEngine engine = factory.getScriptEngine();
+
+            // Execute regression in R
+            engine.put("x", xVector);
+            engine.put("y", yVector);
+            ListVector rModel = null;
+            try {
+              rModel = (ListVector)engine.eval("lm(y ~ x)");
+            } catch (ScriptException e) {
+              return null;
+            }
+
+            // Send back coefficients extracted from result model
+            Vector coefficients = rModel.getElementAsVector("coefficients");
+            Model model = new Model();
+            model.setIntercept(coefficients.getElementAsDouble(0));
+            model.setSlope(coefficients.getElementAsDouble(1));
+
+            return model;
+          }
+        }
+      </code>
+    </pre>
+    <h2>Deploy and test</h2>
+    <p>To create the <code>war</code> file, right-click on the project and select Run as → Maven install. The <code>regression.war</code> archive is created in the <code>target</code> folder. This file can be deployed in any servlet container, for example Apache Tomcat.</p>
+    <p>It is easy to test the service with a REST client browser extension like <a href="https://www.getpostman.com/">Postman</a> for Chrome or <a href="https://addons.mozilla.org/fr/firefox/addon/httprequester">HttpResquester</a> for Firefox.</p>
+    <p>The image below gives an example of call to the service (deployed locally) using HttpRequester. JSON is used for request and response contents (set the <code>Accept</code> header to <code>application/json</code> in the Headers tab).</p>
+    <img src="img/test-json.png"/>
+    <p>To test the service with XML, change the <code>Accept</code> and <code>Content-Type</code> headers to <code>application/xml</code> and enter for example the following data:</p>
+    <pre>
+      <code class="language-xml">
+        &lt;?xml version="1.0" encoding="UTF-8"?>
+        &lt;tns:Points xmlns:tns="http://www.example.org/regression-service" >
+          &lt;tns:Point>
+            &lt;tns:X>0.0&lt;/tns:X>
+            &lt;tns:Y>0.0&lt;/tns:Y>
+          &lt;/tns:Point>
+          &lt;tns:Point>
+            &lt;tns:X>1.0&lt;/tns:X>
+            &lt;tns:Y>1.0&lt;/tns:Y>
+          &lt;/tns:Point>
+        &lt;/tns:Points>
+      </code>
+    </pre>
+    <p><i>Nota bene</i>: be careful to avoid any spaces before <code>&lt;?xml&hellip;</code>. You can also omit the first line altogether.</p>
+    <p>A more visual test client is available <a href="client.html">here</a>.</p>
+    <h2>Conclusion</h2>
+    <p>We presented a very simple example of how to build a CSPA service by wrapping an R script in a REST web service. The implementation was kept intentionally basic. For a real service, a lot of features should be improved: error management, logging, design of the objects, persistence of the R script engine, etc.</p>
+    <p>Nevertheless, the development strategy presented here can be reused for more complex services.</p>
+  </body>
+</html>

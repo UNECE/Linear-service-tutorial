@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.example.org/regression-service"
+	xmlns:tns="http://www.example.org/regression-service"
+	elementFormDefault="qualified">
+	<element name="Point">
+		<complexType>
+			<sequence>
+				<element name="X" type="double" />
+				<element name="Y" type="double" />
+			</sequence>
+		</complexType>
+	</element>
+	<element name="Points">
+		<complexType>
+			<sequence maxOccurs="unbounded">
+				<element ref="tns:Point" />
+			</sequence>
+		</complexType>
+	</element>
+
+	<element name="Model">
+		<complexType>
+			<sequence>
+				<element name="Intercept" type="double" />
+				<element name="Slope" type="double" />
+			</sequence>
+		</complexType>
+	</element>
+</schema>

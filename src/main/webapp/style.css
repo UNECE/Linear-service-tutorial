@@ -1,0 +1,89 @@
+body {
+  font: 14px sans-serif;
+}
+
+h1 {
+  font: 38px sans-serif;
+  color: #23abe6;
+}
+
+h2 {
+  font: 32px sans-serif;
+  color: #0e8cc3;
+}
+
+h3 {
+  font: 26px sans-serif;
+  color: #076690;
+}
+
+h4 {
+  font: 22px sans-serif;
+  color: #0c4b66;
+}
+
+h5 {
+  font: 18px sans-serif;
+  color: #062633;
+}
+
+img {
+  padding: 30px;
+}
+
+svg {
+  font: 11px sans-serif;
+}
+
+.axis path, .axis line {
+  fill: none;
+  stroke: #0c4b66;
+  shape-rendering: crispEdges;
+}
+
+.model {
+  stroke: #a25b0c;
+}
+
+.dot {
+  stroke: #000;
+}
+
+.btn {
+  cursor: pointer;
+  margin: 10px;
+  border-radius: 5px;
+  text-decoration: none;
+  padding: 10px;
+  font-size: 22px;
+  transition: .3s;
+  -webkit-transition: .3s;
+  -moz-transition: .3s;
+  -o-transition: .3s;
+  display: inline-block;
+}
+
+.blue {
+  color: #23abe6;
+  border: 2px #23abe6 solid;
+}
+
+.blue:hover {
+  background-color: #23abe6;
+  color: #fff
+}
+
+.yellow {
+  color: #ff8a07;
+  border: 2px #ff8a07 solid;
+}
+
+.yellow:hover {
+  color: #fff;
+  background-color: #ff8a07;
+}
+
+.buttons {
+  padding-top: 30px;
+  padding-left: 30px;
+}
